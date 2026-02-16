@@ -1,6 +1,6 @@
 # Mindy - Progress
 
-## MVP Phase 1 - Progress
+## MVP Phase 1 - Complete
 
 - [x] Project initialization (go.mod)
 - [x] Configuration system (CLI + config file)
@@ -12,21 +12,29 @@
 - [x] File watcher / ingestion
 - [x] Indexer pipeline
 - [x] HTTP API server
-- [x] Query endpoints (search, graph) - partial
+- [x] Query endpoints (search, graph)
 
-## Completed
+## Phase 1.1 Fixes (Completed)
 
-- Binary builds and runs
-- Health endpoint works
-- Data directory created at ~/.mindy/data
+- [x] Fixed /ingest API to actually call indexer
+- [x] Added vector persistence (save on add/close)
+- [x] Implemented TF-IDF embedder (local-only, no external deps)
+- [x] Improved entity extraction with regex patterns (email, URL, phone, date)
 
 ## Current Task
 
-Testing the full pipeline (index + query)
+Testing the full pipeline (ingest → index → search)
 
-## Notes
+## Technology
 
-- Start with local file ingestion
-- Build from bottom up: blob → vector → graph → api
-- Test each component before moving to next
-- Using random embedder for MVP (need real embeddings later)
+| Component | Implementation |
+|-----------|---------------|
+| Embedding | TF-IDF with hash-based vectorization |
+| Storage | Local filesystem + BadgerDB |
+| API | Chi router |
+
+## Next Steps
+
+1. Test full pipeline end-to-end
+2. Add more file type support (PDF, DOCX)
+3. Consider coordination plane (Phase 2)

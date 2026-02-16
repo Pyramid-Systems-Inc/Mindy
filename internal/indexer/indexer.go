@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -205,11 +206,50 @@ func chunkText(text string, size int) []string {
 
 func extractEntities(text string) []string {
 	var entities []string
-	words := strings.Fields(text)
+	seen := make(map[string]bool)
 
+	emailRegex := regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+	urlRegex := regexp.MustCompile(`https?://[^\s<>"{}|\\^` + "`" + `]+`)
+	phoneRegex := regexp.MustCompile(`(\+?1?[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}`)
+	dateRegex := regexp.MustCompile(`\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b`)
+
+	emails := emailRegex.FindAllString(text, -1)
+	for _, e := range emails {
+		if !seen[e] {
+			seen[e] = true
+			entities = append(entities, "email:"+e)
+		}
+	}
+
+	urls := urlRegex.FindAllString(text, -1)
+	for _, u := range urls {
+		if !seen[u] {
+			seen[u] = true
+			entities = append(entities, "url:"+u)
+		}
+	}
+
+	phones := phoneRegex.FindAllString(text, -1)
+	for _, p := range phones {
+		if !seen[p] {
+			seen[p] = true
+			entities = append(entities, "phone:"+p)
+		}
+	}
+
+	dates := dateRegex.FindAllString(text, -1)
+	for _, d := range dates {
+		if !seen[d] {
+			seen[d] = true
+			entities = append(entities, "date:"+d)
+		}
+	}
+
+	words := strings.Fields(text)
 	for _, word := range words {
 		word = strings.Trim(word, ".,!?;:\"'()[]{}")
-		if len(word) > 3 && isCapitalized(word) {
+		if len(word) > 2 && isCapitalized(word) && !seen[word] {
+			seen[word] = true
 			entities = append(entities, word)
 		}
 	}
