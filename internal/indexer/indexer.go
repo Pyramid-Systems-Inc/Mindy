@@ -17,19 +17,26 @@ import (
 )
 
 type Indexer struct {
-	blobStore  *blob.Store
+	blobStore   *blob.Store
 	vectorIndex *vector.Index
-	graphStore *graph.Store
-	embedder   embedder.Embedder
+	graphStore  *graph.Store
+	embedder    *embedder.TFIDF
+	dataDir     string
 }
 
-func New(blobStore *blob.Store, vectorIndex *vector.Index, graphStore *graph.Store) *Indexer {
+func New(blobStore *blob.Store, vectorIndex *vector.Index, graphStore *graph.Store, dataDir string) *Indexer {
+	tfidf, _ := embedder.NewTFIDF(dataDir)
 	return &Indexer{
 		blobStore:   blobStore,
 		vectorIndex: vectorIndex,
 		graphStore:  graphStore,
-		embedder:    embedder.NewRandom(384),
+		embedder:    tfidf,
+		dataDir:     dataDir,
 	}
+}
+
+func (i *Indexer) GetEmbedder() *embedder.TFIDF {
+	return i.embedder
 }
 
 func (i *Indexer) IndexFile(path string) error {
@@ -68,6 +75,13 @@ func (i *Indexer) IndexFile(path string) error {
 	}
 
 	text := extractText(path, content)
+
+	if i.embedder != nil {
+		if err := i.embedder.AddDocument(docID, text); err != nil {
+			fmt.Printf("Warning: failed to add document to TF-IDF: %v\n", err)
+		}
+	}
+
 	chunks := chunkText(text, 512)
 
 	for idx, chunk := range chunks {
@@ -128,6 +142,8 @@ func (i *Indexer) IndexFile(path string) error {
 			})
 		}
 	}
+
+	i.vectorIndex.Save()
 
 	return nil
 }

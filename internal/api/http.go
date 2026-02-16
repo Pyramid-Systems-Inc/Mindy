@@ -13,6 +13,7 @@ import (
 
 	"mindy/internal/blob"
 	"mindy/internal/graph"
+	"mindy/internal/indexer"
 	"mindy/internal/vector"
 	"mindy/pkg/embedder"
 )
@@ -22,17 +23,23 @@ type Server struct {
 	blobStore   *blob.Store
 	vectorIndex *vector.Index
 	graphStore  *graph.Store
+	indexer    *indexer.Indexer
 	embedder   embedder.Embedder
 	httpServer  *http.Server
 }
 
-func NewServer(port int, blobStore *blob.Store, vectorIndex *vector.Index, graphStore *graph.Store) *Server {
+func NewServer(port int, blobStore *blob.Store, vectorIndex *vector.Index, graphStore *graph.Store, idx *indexer.Indexer) *Server {
+	var tfidf *embedder.TFIDF
+	if idx != nil {
+		tfidf = idx.GetEmbedder()
+	}
 	return &Server{
 		port:        port,
 		blobStore:   blobStore,
 		vectorIndex: vectorIndex,
 		graphStore:  graphStore,
-		embedder:    embedder.NewRandom(384),
+		indexer:     idx,
+		embedder:    tfidf,
 	}
 }
 
@@ -91,16 +98,26 @@ func (s *Server) ingest(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 			if !info.IsDir() {
+				if s.indexer != nil {
+					go s.indexer.IndexFile(p)
+				}
 				indexed++
 			}
 			return nil
 		})
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":    "ok",
-			"message":   "Directory queued for indexing",
-			"files":     indexed,
+			"status":  "ok",
+			"message": "Directory queued for indexing",
+			"files":   indexed,
 		})
 		return
+	}
+
+	if s.indexer != nil {
+		if err := s.indexer.IndexFile(path); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{
