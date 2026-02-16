@@ -1,7 +1,6 @@
 package blob
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -69,7 +68,7 @@ func TestStore_Has(t *testing.T) {
 
 	exists, err := store.Has(hash)
 	if err != nil {
-		t	t.Fatalf("failed to check has: %v", err)
+		t.Fatalf("failed to check has: %v", err)
 	}
 	if !exists {
 		t.Error("expected hash to exist")

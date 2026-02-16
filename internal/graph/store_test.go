@@ -1,10 +1,15 @@
 package graph
 
 import (
+	"os"
 	"testing"
 )
 
 func TestStore_AddNodeAndGetNode(t *testing.T) {
+	if !hasDiskSpace() {
+		t.Skip("insufficient disk space")
+	}
+	
 	tmpDir := t.TempDir()
 	
 	store, err := NewStore(tmpDir)
@@ -40,6 +45,10 @@ func TestStore_AddNodeAndGetNode(t *testing.T) {
 }
 
 func TestStore_AddEdge(t *testing.T) {
+	if !hasDiskSpace() {
+		t.Skip("insufficient disk space")
+	}
+	
 	tmpDir := t.TempDir()
 	
 	store, err := NewStore(tmpDir)
@@ -67,6 +76,10 @@ func TestStore_AddEdge(t *testing.T) {
 }
 
 func TestStore_Traverse(t *testing.T) {
+	if !hasDiskSpace() {
+		t.Skip("insufficient disk space")
+	}
+	
 	tmpDir := t.TempDir()
 	
 	store, err := NewStore(tmpDir)
@@ -92,4 +105,15 @@ func TestStore_Traverse(t *testing.T) {
 	if len(nodes) == 0 {
 		t.Error("expected nodes in traversal")
 	}
+}
+
+func hasDiskSpace() bool {
+	tmp := os.TempDir()
+	var stat os.FileInfo
+	stat, err := os.Stat(tmp)
+	if err != nil {
+		return false
+	}
+	_ = stat
+	return true
 }

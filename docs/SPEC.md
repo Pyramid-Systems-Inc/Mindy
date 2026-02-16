@@ -7,6 +7,13 @@
 - **Goal:** Ingest local files, build vector + graph memory, query semantically
 - **Target Users:** Single-user local-first
 
+## Design Goals
+
+1. **Local-First**: All data stays on the user's machine
+2. **Privacy**: No external APIs, no cloud dependencies
+3. **Simplicity**: Single binary, minimal setup
+4. **Extensibility**: Plugin architecture for future features
+
 ## Core Features
 
 ### Phase 1 (MVP) - Complete
@@ -14,22 +21,25 @@
 1. **File Ingestion**
    - Watch directories for new/changed files (polling every 5s)
    - Manual ingest via API
-   - Support: .txt, .md, .html, .json
+   - Support: .txt, .md, .html, .json, .xml, .csv, .log
 
 2. **Blob Store**
    - Store raw file content by content-hash (SHA256)
    - Immutable storage
    - Located at `~/.mindy/data/blobs`
+   - Two-level directory structure for filesystem efficiency
 
 3. **Vector Index**
    - TF-IDF with hash-based vectorization (4096-dim)
+   - IVF (Inverted File) index for fast search
    - Cosine similarity search
    - Located at `~/.mindy/data/vector`
 
 4. **Graph Store**
    - Extract entities and relationships
-   - Store in BadgerDB
+   - Store in BadgerDB (embedded key-value store)
    - Located at `~/.mindy/data/graph`
+   - Node and edge types with properties
 
 5. **Query API**
    - Semantic search via TF-IDF vectors
@@ -48,10 +58,58 @@
 2. **Persistence**
    - TF-IDF vectors saved to disk
    - Vocabulary and IDF scores persisted
+   - Vector index saved on close
 
 3. **Better Search**
    - Normalized TF-IDF vectors
    - Cosine similarity ranking
+
+## Technical Specification
+
+### Vector Index
+
+**TF-IDF Implementation**:
+- **Dimension**: 4096 (fixed)
+- **Mapping**: Hash-based (FNV32a)
+- **TF formula**: `1 + log(TF_raw)`
+- **IDF formula**: `log((N + 1) / (df + 1))`
+- **Normalization**: L2 (Euclidean)
+- **Search**: IVF with cosine similarity
+
+**Storage**:
+```
+~/.mindy/data/tfidf/
+├── vocab.json     # term → index mapping
+├── idf.json       # term → IDF score
+├── vectors.json   # doc_id → vector (sparse format)
+└── meta.json      # document count
+```
+
+### Graph Store
+
+**Schema**:
+```
+Nodes:
+  - Document: file metadata, blob reference
+  - Chunk: text chunk from document
+  - Entity: extracted entity (email, URL, person, etc.)
+
+Edges:
+  - HAS_CHUNK: Document → Chunk
+  - HAS_ENTITY: Chunk → Entity
+```
+
+**Storage**: BadgerDB (embedded)
+
+### Entity Extraction
+
+| Type | Pattern | Node ID Prefix |
+|------|---------|----------------|
+| Email | `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}` | `email:` |
+| URL | `https?://...` | `url:` |
+| Phone | `\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}` | `phone:` |
+| Date | `\d{1,2}[/-]\d{1,2}[/-]\d{2,4}` | `date:` |
+| Proper Noun | Capitalized word, len > 2 | (none) |
 
 ## Configuration
 
@@ -73,6 +131,21 @@
 | GET | /api/v1/graph/traverse?start=<id>&type=<edge>&depth=<n> | Graph traversal |
 | GET | /api/v1/blob/{hash} | Get raw blob content |
 
+### Search Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| q | string | required | Search query |
+| k | int | 10 | Number of results |
+
+### Traverse Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| start | string | required | Starting node ID |
+| type | string | "" | Edge type filter (empty = all) |
+| depth | int | 3 | Traversal depth |
+
 ## Data Flow
 
 ```
@@ -90,6 +163,15 @@ Semantic Query → TF-IDF Query Vector → Cosine Similarity → Ranked Results
 Graph Query → BFS Traversal → Node/Edge Results
 ```
 
+## Performance Characteristics
+
+| Operation | Complexity | Notes |
+|-----------|------------|-------|
+| Index document | O(T) | T = number of terms |
+| Search | O(P × C) | P = probes, C = avg cluster size |
+| Graph traversal | O(V + E) | BFS |
+| Blob read | O(1) | Content-addressed |
+
 ## Out of Scope (Phase 1)
 
 - PDF/DOCX parsing (future)
@@ -98,6 +180,7 @@ Graph Query → BFS Traversal → Node/Edge Results
 - Multi-node coordination (Phase 3)
 - Multi-tenant / auth (Phase 3)
 - Web UI (future)
+- Real-time sync (future)
 
 ## Technology
 
@@ -108,3 +191,24 @@ Graph Query → BFS Traversal → Node/Edge Results
 | Vector | Custom TF-IDF (hash-based) |
 | HTTP | Chi router |
 | No external dependencies | ✓ |
+
+## Future Specifications (Planned)
+
+### BM25 Ranking
+Alternative ranking algorithm with better performance for keyword search:
+- Parameters: k1 (term frequency saturation), b (document length normalization)
+- Default: k1=1.5, b=0.75
+
+### N-gram Indexing
+Capture phrase information:
+- Unigrams, bigrams, trigrams
+- Configurable n-gram range
+
+### PDF Support
+- Text extraction from PDF
+- Metadata preservation
+
+### Connectors
+- GitHub (repos, issues, PRs)
+- Gmail (emails)
+- File system (extended)
