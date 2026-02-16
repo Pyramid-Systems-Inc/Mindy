@@ -150,5 +150,3 @@ func TestExtractor_ExtractDOCX(t *testing.T) {
 		t.Log("DOCX extraction on invalid data handled gracefully")
 	}
 }
-
-import "strings"

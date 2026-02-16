@@ -141,7 +141,7 @@ func (e *Extractor) ExtractDOCX(content []byte) (string, error) {
 					inText = false
 				case xml.CharData:
 					if inText && currentTag == "t" {
-						text.Write(string(t))
+						text.WriteString(string(t))
 					}
 				}
 			}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dgraph-io/badger/v4"
 )
@@ -188,6 +189,90 @@ func (s *Store) Traverse(start string, edgeType string, depth int) ([]*Node, err
 	}
 
 	return result, nil
+}
+
+func (s *Store) SearchNodes(nodeType string, labelQuery string, limit int) []*Node {
+	var results []*Node
+	
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.IteratorOptions{}
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		prefix := []byte("node:")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			var node Node
+			if err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &node)
+			}); err != nil {
+				continue
+			}
+
+			if nodeType != "" && node.Type != nodeType {
+				continue
+			}
+
+			if labelQuery != "" {
+				match := false
+				if strings.Contains(strings.ToLower(node.Label), strings.ToLower(labelQuery)) {
+					match = true
+				} else if strings.Contains(strings.ToLower(node.ID), strings.ToLower(labelQuery)) {
+					match = true
+				}
+				if name, ok := node.Props["name"].(string); ok {
+					if strings.Contains(strings.ToLower(name), strings.ToLower(labelQuery)) {
+						match = true
+					}
+				}
+				if !match {
+					continue
+				}
+			}
+
+			results = append(results, &node)
+
+			if len(results) >= limit {
+				break
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return []*Node{}
+	}
+
+	return results
+}
+
+func (s *Store) CountNodes(nodeType string) int {
+	count := 0
+	
+	s.db.View(func(txn *badger.Txn) error {
+		opts := badger.IteratorOptions{}
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		prefix := []byte("node:")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			var node Node
+			if err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &node)
+			}); err != nil {
+				continue
+			}
+
+			if nodeType == "" || node.Type == nodeType {
+				count++
+			}
+		}
+		return nil
+	})
+
+	return count
 }
 
 func (s *Store) Close() error {
