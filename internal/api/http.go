@@ -20,6 +20,105 @@ import (
 	"mindy/pkg/embedder"
 )
 
+const webUIHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindy - Personal Knowledge Graph</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; text-align: center; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        .search-box { background: white; border-radius: 12px; padding: 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+        .search-box h2 { margin-bottom: 1rem; color: #667eea; }
+        .search-form { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .search-input { flex: 1; min-width: 250px; padding: 0.75rem 1rem; font-size: 1rem; border: 2px solid #e0e0e0; border-radius: 8px; }
+        .search-input:focus { outline: none; border-color: #667eea; }
+        .btn { padding: 0.75rem 1.5rem; font-size: 1rem; border: none; border-radius: 8px; cursor: pointer; }
+        .btn-primary { background: #667eea; color: white; }
+        .results { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .result-item { padding: 1rem; border-bottom: 1px solid #e0e0e0; }
+        .result-item:hover { background: #f9f9f9; }
+        .result-score { display: inline-block; background: #667eea; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.875rem; margin-bottom: 0.5rem; }
+        .result-meta { color: #666; font-size: 0.875rem; }
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.5rem; }
+        .tab { padding: 0.5rem 1rem; border: none; background: none; cursor: pointer; font-size: 1rem; color: #666; }
+        .tab.active { color: #667eea; background: rgba(102, 126, 234, 0.1); border-radius: 8px 8px 0 0; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .loading { text-align: center; padding: 2rem; color: #666; }
+        .api-endpoints { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Mindy</h1>
+        <p>Personal AI Memory & Knowledge Graph</p>
+    </div>
+    <div class="container">
+        <div class="search-box">
+            <h2>Search</h2>
+            <form class="search-form" id="searchForm">
+                <input type="text" class="search-input" id="searchInput" placeholder="Ask anything..." autocomplete="off">
+                <button type="submit" class="btn btn-primary">Search</button>
+            </form>
+        </div>
+        <div class="tabs">
+            <button class="tab active" data-tab="results">Results</button>
+            <button class="tab" data-tab="api">API</button>
+        </div>
+        <div class="tab-content active" id="results">
+            <div class="results" id="resultsContainer"><p style="text-align: center; color: #666;">Enter a search query</p></div>
+        </div>
+        <div class="tab-content" id="api">
+            <div class="api-endpoints">
+                <h3>API Endpoints</h3>
+                <p><strong>GET /health</strong> - Health check</p>
+                <p><strong>POST /api/v1/ingest?path=&lt;path&gt;</strong> - Index file/directory</p>
+                <p><strong>GET /api/v1/search?q=&lt;query&gt;&amp;k=10</strong> - Semantic search</p>
+                <p><strong>GET /api/v1/stats</strong> - Index statistics</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        const API_BASE = window.location.origin;
+        document.getElementById('searchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+            const container = document.getElementById('resultsContainer');
+            container.innerHTML = '<div class="loading">Searching...</div>';
+            try {
+                const response = await fetch(API_BASE + '/api/v1/search?q=' + encodeURIComponent(query) + '&k=20');
+                const data = await response.json();
+                if (data.results && data.results.length > 0) {
+                    container.innerHTML = data.results.map(r => {
+                        let meta = {};
+                        try { meta = JSON.parse(r.meta); } catch (e) {}
+                        return '<div class="result-item"><span class="result-score">' + (r.score * 100).toFixed(1) + '%</span><div class="result-meta"><strong>' + (meta.path || r.id) + '</strong></div></div>';
+                    }).join('');
+                } else {
+                    container.innerHTML = '<p style="text-align: center; color: #666;">No results found</p>';
+                }
+            } catch (e) {
+                container.innerHTML = '<p style="color: red;">Error: ' + e.message + '</p>';
+            }
+        });
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>`
+
 type Server struct {
 	port        int
 	blobStore   *blob.Store
@@ -51,6 +150,8 @@ func (s *Server) Start() error {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
+	r.Get("/", s.serveWebUI)
+	r.Get("/ui", s.serveWebUI)
 	r.Get("/health", s.health)
 
 	r.Route("/api/v1", func(r chi.Router) {
@@ -76,6 +177,11 @@ func (s *Server) Stop() {
 	if s.httpServer != nil {
 		s.httpServer.Close()
 	}
+}
+
+func (s *Server) serveWebUI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(webUIHTML))
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
