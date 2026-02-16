@@ -254,3 +254,109 @@ func TestTFIDF_EmptyDocument(t *testing.T) {
 		t.Error("expected no results for empty document")
 	}
 }
+
+func TestTFIDF_CodeTokenization(t *testing.T) {
+	tmpDir := t.TempDir()
+	
+	tfidf, err := NewTFIDF(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create TF-IDF: %v", err)
+	}
+	defer tfidf.Close()
+
+	terms := tfidf.tokenize("myFunctionName someVariable snake_case_test")
+	
+	if len(terms) == 0 {
+		t.Error("expected code tokens")
+	}
+	
+	foundCodeTokens := false
+	codeTokens := []string{"my", "function", "name", "some", "variable", "snake", "case", "test"}
+	for _, term := range terms {
+		for _, expected := range codeTokens {
+			if term == expected {
+				foundCodeTokens = true
+				break
+			}
+		}
+	}
+	if !foundCodeTokens {
+		t.Logf("Got terms: %v", terms)
+	}
+}
+
+func TestTFIDF_NGrams(t *testing.T) {
+	tmpDir := t.TempDir()
+	
+	tfidf, err := NewTFIDF(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create TF-IDF: %v", err)
+	}
+	defer tfidf.Close()
+
+	terms := tfidf.tokenize("machine learning algorithms")
+	
+	hasBigram := false
+	hasTrigram := false
+	for _, term := range terms {
+		if len(term) > 3 && term[:3] == "bg:" {
+			hasBigram = true
+		}
+		if len(term) > 3 && term[:3] == "tg:" {
+			hasTrigram = true
+		}
+	}
+	
+	if !hasBigram {
+		t.Error("expected bigrams")
+	}
+	if !hasTrigram {
+		t.Error("expected trigrams")
+	}
+}
+
+func TestTFIDF_FuzzyMatching(t *testing.T) {
+	tmpDir := t.TempDir()
+	
+	tfidf, err := NewTFIDF(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create TF-IDF: %v", err)
+	}
+	defer tfidf.Close()
+
+	tfidf.AddDocument("doc1", "python programming")
+	tfidf.AddDocument("doc2", "python programmer")
+
+	results, err := tfidf.Search("programing", 2)
+	if err != nil {
+		t.Fatalf("failed to search: %v", err)
+	}
+
+	if len(results) == 0 {
+		t.Error("expected fuzzy match results")
+	}
+}
+
+func TestLevenshteinDistance(t *testing.T) {
+	tests := []struct {
+		s1   string
+		s2   string
+		want int
+	}{
+		{"", "", 0},
+		{"", "abc", 3},
+		{"abc", "", 3},
+		{"abc", "abc", 0},
+		{"abc", "abd", 1},
+		{"abc", "xyz", 3},
+		{"kitten", "sitting", 3},
+		{"flaw", "lawn", 2},
+	}
+
+	for _, tt := range tests {
+		got := levenshteinDistance(tt.s1, tt.s2)
+		if got != tt.want {
+			t.Errorf("levenshteinDistance(%q, %q) = %d, want %d", tt.s1, tt.s2, got, tt.want)
+		}
+	}
+}

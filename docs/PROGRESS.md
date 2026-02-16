@@ -43,6 +43,14 @@
 - [x] **Graph Search** - GET /api/v1/graph/search for node lookup
 - [x] **Web UI** - Built-in web interface at /ui
 
+### Phase 1.4 Enhancements (Search Quality) - COMPLETE ✓
+- [x] **N-gram Indexing** - Bigrams and trigrams for phrase matching (1-3 range)
+- [x] **Code-aware Tokenization** - Splits camelCase, snake_case, kebab-case, PascalCase
+- [x] **BM25 by Default** - Enabled BM25 ranking as default algorithm
+- [x] **Synonym Expansion** - Local synonym map with 500+ programming terms
+- [x] **Fuzzy Matching** - Levenshtein distance for typo tolerance (threshold: 2)
+- [x] **Auto-reindex** - Version tracking triggers automatic reindex on config changes
+
 ## New API Endpoints
 
 | Method | Path | Description |
@@ -66,7 +74,7 @@ GET /api/v1/search?q=<query>&k=<n>&offset=<n>&type=<type>&path=<path>
 
 | Component | Tests | Status |
 |-----------|-------|--------|
-| TF-IDF Embedder | 11 | ✓ Passing |
+| TF-IDF Embedder | 14 | ✓ Passing |
 | Blob Store | 4 | ⚠ Needs disk space |
 | Graph Store | 3 | ⚠ Needs disk space |
 | Indexer | 4 | ⚠ Needs disk space |
@@ -75,8 +83,6 @@ GET /api/v1/search?q=<query>&k=<n>&offset=<n>&type=<type>&path=<path>
 Run tests: `go test ./...`
 
 ## What's Left (Future)
-- [ ] N-gram Indexing for phrases
-- [ ] Query rewriting/synonyms
 - [ ] Batch import/export
 - [ ] Web crawler (Phase 2)
 - [ ] Connectors (GitHub, Gmail) (Phase 2)

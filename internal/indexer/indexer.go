@@ -19,18 +19,22 @@ import (
 )
 
 type Indexer struct {
-	blobStore   *blob.Store
-	vectorIndex *vector.Index
-	graphStore  *graph.Store
-	embedder    *embedder.TFIDF
-	dataDir     string
-	extractor  *extractor.Extractor
-	fileTracker *FileTracker
+	blobStore    *blob.Store
+	vectorIndex  *vector.Index
+	graphStore   *graph.Store
+	embedder     *embedder.TFIDF
+	dataDir      string
+	extractor    *extractor.Extractor
+	fileTracker  *FileTracker
+	needsReindex bool
 }
 
+const IndexerVersion = "2.0.0"
+
 type FileTracker struct {
-	dataDir string
-	files   map[string]FileInfo
+	dataDir       string
+	files         map[string]FileInfo
+	indexerVersion string
 }
 
 type FileInfo struct {
@@ -45,15 +49,25 @@ func New(blobStore *blob.Store, vectorIndex *vector.Index, graphStore *graph.Sto
 	tfidf, _ := embedder.NewTFIDF(dataDir)
 	tracker := NewFileTracker(dataDir)
 	
-	return &Indexer{
-		blobStore:   blobStore,
-		vectorIndex: vectorIndex,
-		graphStore:  graphStore,
-		embedder:    tfidf,
-		dataDir:     dataDir,
-		extractor:   extractor.New(),
-		fileTracker: tracker,
+	needsReindex := tracker.indexerVersion != IndexerVersion
+	
+	idx := &Indexer{
+		blobStore:    blobStore,
+		vectorIndex:  vectorIndex,
+		graphStore:   graphStore,
+		embedder:     tfidf,
+		dataDir:      dataDir,
+		extractor:    extractor.New(),
+		fileTracker:  tracker,
+		needsReindex: needsReindex,
 	}
+	
+	if needsReindex {
+		fmt.Printf("[Indexer] Version mismatch detected (stored: %s, current: %s). Triggering auto-reindex...\n", tracker.indexerVersion, IndexerVersion)
+		go idx.ReindexAll()
+	}
+	
+	return idx
 }
 
 func NewFileTracker(dataDir string) *FileTracker {
@@ -71,12 +85,27 @@ func (ft *FileTracker) load() {
 	if err != nil {
 		return
 	}
-	json.Unmarshal(data, &ft.files)
+	var meta struct {
+		Files          map[string]FileInfo `json:"files"`
+		IndexerVersion string              `json:"indexer_version"`
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return
+	}
+	ft.files = meta.Files
+	ft.indexerVersion = meta.IndexerVersion
 }
 
 func (ft *FileTracker) save() {
 	path := filepath.Join(ft.dataDir, "file_tracker.json")
-	data, _ := json.Marshal(ft.files)
+	meta := struct {
+		Files          map[string]FileInfo `json:"files"`
+		IndexerVersion string              `json:"indexer_version"`
+	}{
+		Files:          ft.files,
+		IndexerVersion: IndexerVersion,
+	}
+	data, _ := json.Marshal(meta)
 	os.WriteFile(path, data, 0644)
 }
 

@@ -64,17 +64,62 @@
    - Normalized TF-IDF vectors
    - Cosine similarity ranking
 
+### Phase 1.4 (Search Quality)
+
+1. **N-gram Indexing**
+   - Unigrams, bigrams (bg:), trigrams (tg:)
+   - Range: 1-3 (configurable)
+
+2. **Code-aware Tokenization**
+   - Splits camelCase, snake_case, kebab-case, PascalCase
+   - Handles file paths and function names
+
+3. **BM25 Ranking**
+   - Enabled by default
+   - Parameters: k1=1.5, b=0.75
+
+4. **Synonym Expansion**
+   - Local synonym map (500+ programming terms)
+   - Configurable via `config/synonyms.json`
+
+5. **Fuzzy Matching**
+   - Levenshtein distance
+   - Threshold: 2 edits (configurable)
+
+6. **Auto-reindex**
+   - Version tracking in file_tracker.json
+   - Automatic reindex on upgrades
+
 ## Technical Specification
 
 ### Vector Index
 
-**TF-IDF Implementation**:
+**TF-IDF/BM25 Implementation**:
 - **Dimension**: 8192 (fixed)
 - **Mapping**: Hash-based (FNV32a)
+- **Algorithm**: BM25 (enabled by default)
 - **TF formula**: `1 + log(TF_raw)`
 - **IDF formula**: `log((N + 1) / (df + 1))`
+- **BM25 TF normalization**: `(tf * (k1 + 1)) / (tf + k1*(1-b+b*docLen/avgDocLen))`
 - **Normalization**: L2 (Euclidean)
 - **Search**: IVF with cosine similarity
+
+**N-gram Support**:
+- Bigrams: Prefix `bg:` (e.g., `bg:machine_learning`)
+- Trigrams: Prefix `tg:` (e.g., `tg:machine_learning_algorithms`)
+
+**Code Tokenization**:
+- camelCase → camel, case
+- snake_case → snake, case
+- kebab-case → kebab, case
+
+**Fuzzy Matching**:
+- Levenshtein distance
+- Threshold: 2 edits (terms 3-12 chars)
+
+**Synonyms**:
+- Loaded from `config/synonyms.json`
+- 500+ programming terms included
 
 **Storage**:
 ```
@@ -194,13 +239,11 @@ Graph Query → BFS Traversal → Node/Edge Results
 |-----------|---------------|
 | Language | Go 1.21+ |
 | Storage | Local filesystem + BadgerDB |
-| Vector | Custom TF-IDF (hash-based) |
+| Vector | Custom TF-IDF/BM25 (hash-based) |
 | HTTP | Chi router |
 | No external dependencies | ✓ |
 
-## Future Specifications (Planned)
-
-### Phase 2 - Distributed / Crawler
+## Future Specifications (Phase 2)
 
 ### Web Crawler
 - Index web pages automatically
@@ -211,12 +254,6 @@ Graph Query → BFS Traversal → Node/Edge Results
 - GitHub (repos, issues, PRs)
 - Gmail (emails)
 
-### BM25 Ranking
-Alternative ranking algorithm with better performance for keyword search:
-- Parameters: k1 (term frequency saturation), b (document length normalization)
-- Default: k1=1.5, b=0.75
-
-### N-gram Indexing
-Capture phrase information:
-- Unigrams, bigrams, trigrams
-- Configurable n-gram range
+### Batch Import/Export
+- JSON export/import for backup
+- Selective data export

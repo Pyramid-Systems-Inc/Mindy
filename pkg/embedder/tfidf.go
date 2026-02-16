@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -46,23 +47,41 @@ type TFIDF struct {
 	useBM25       bool
 	k1            float32
 	b             float32
+	synonyms      map[string][]string
+	useNgrams     bool
+	ngramRange    int
+	useFuzzy      bool
+	fuzzyThreshold int
+	useCodeToken  bool
 }
 
 type TFIDFConfig struct {
-	Dimension int
-	DataDir   string
-	UseBM25   bool
-	K1        float32
-	B         float32
+	Dimension     int
+	DataDir       string
+	UseBM25       bool
+	K1            float32
+	B             float32
+	UseNgrams     bool
+	NgramRange    int
+	UseFuzzy      bool
+	FuzzyThreshold int
+	UseCodeToken  bool
+	SynonymsPath  string
 }
 
 func NewTFIDF(dataDir string) (*TFIDF, error) {
 	cfg := &TFIDFConfig{
-		Dimension: 8192,
-		DataDir:   dataDir,
-		UseBM25:   false,
-		K1:        1.5,
-		B:         0.75,
+		Dimension:      8192,
+		DataDir:        dataDir,
+		UseBM25:        true,
+		K1:             1.5,
+		B:              0.75,
+		UseNgrams:      true,
+		NgramRange:     3,
+		UseFuzzy:       true,
+		FuzzyThreshold: 2,
+		UseCodeToken:   true,
+		SynonymsPath:   "",
 	}
 	return NewTFIDFWithConfig(cfg)
 }
@@ -73,16 +92,59 @@ func NewTFIDFWithConfig(cfg *TFIDFConfig) (*TFIDF, error) {
 		dim = 8192
 	}
 
+	synonyms := make(map[string][]string)
+	if cfg.SynonymsPath != "" {
+		if data, err := os.ReadFile(cfg.SynonymsPath); err == nil {
+			json.Unmarshal(data, &synonyms)
+		}
+	} else {
+		defaultPath := filepath.Join(filepath.Dir(os.Args[0]), "config", "synonyms.json")
+		if _, err := os.Stat(defaultPath); err == nil {
+			if data, err := os.ReadFile(defaultPath); err == nil {
+				json.Unmarshal(data, &synonyms)
+			}
+		}
+		altPath := filepath.Join(".", "config", "synonyms.json")
+		if _, err := os.Stat(altPath); err == nil {
+			if data, err := os.ReadFile(altPath); err == nil {
+				json.Unmarshal(data, &synonyms)
+			}
+		}
+		homeDir, _ := os.UserHomeDir()
+		homePath := filepath.Join(homeDir, ".mindy", "config", "synonyms.json")
+		if _, err := os.Stat(homePath); err == nil {
+			if data, err := os.ReadFile(homePath); err == nil {
+				json.Unmarshal(data, &synonyms)
+			}
+		}
+	}
+
+	ngramRange := cfg.NgramRange
+	if ngramRange <= 0 {
+		ngramRange = 3
+	}
+
+	fuzzyThreshold := cfg.FuzzyThreshold
+	if fuzzyThreshold <= 0 {
+		fuzzyThreshold = 2
+	}
+
 	t := &TFIDF{
-		dim:        dim,
-		vocab:      make(map[string]int),
-		idf:        make(map[string]float32),
-		docLengths: make(map[string]int),
-		vectors:    make(map[string][]float32),
-		dataDir:    cfg.DataDir,
-		useBM25:    cfg.UseBM25,
-		k1:         cfg.K1,
-		b:          cfg.B,
+		dim:            dim,
+		vocab:          make(map[string]int),
+		idf:            make(map[string]float32),
+		docLengths:     make(map[string]int),
+		vectors:        make(map[string][]float32),
+		dataDir:        cfg.DataDir,
+		useBM25:        cfg.UseBM25,
+		k1:             cfg.K1,
+		b:              cfg.B,
+		synonyms:       synonyms,
+		useNgrams:      cfg.UseNgrams,
+		ngramRange:     ngramRange,
+		useFuzzy:       cfg.UseFuzzy,
+		fuzzyThreshold: fuzzyThreshold,
+		useCodeToken:   cfg.UseCodeToken,
 	}
 
 	if err := t.load(); err == nil {
@@ -94,7 +156,10 @@ func NewTFIDFWithConfig(cfg *TFIDFConfig) (*TFIDF, error) {
 
 func (t *TFIDF) Embed(text string) ([]float32, error) {
 	terms := t.tokenize(text)
-	tf := t.computeTF(terms)
+	expandedTerms := t.expandSynonyms(terms)
+	allTerms := append(terms, expandedTerms...)
+
+	tf := t.computeTF(allTerms)
 
 	queryVec := make([]float32, t.dim)
 	for term, freq := range tf {
@@ -106,13 +171,28 @@ func (t *TFIDF) Embed(text string) ([]float32, error) {
 		queryVec[pos] = freq * idf
 	}
 
+	if t.useFuzzy && len(terms) > 0 {
+		fuzzyTerms := t.findFuzzyMatches(terms)
+		for term, freq := range fuzzyTerms {
+			pos := t.hashTerm(term)
+			idf := t.idf[term]
+			if idf == 0 {
+				idf = float32(math.Log(float64(t.docCount+1))) + 1
+			}
+			queryVec[pos] += freq * idf * 0.5
+		}
+	}
+
 	t.normalize(queryVec)
 	return queryVec, nil
 }
 
 func (t *TFIDF) EmbedWithWeights(text string) ([]float32, map[string]float32, error) {
 	terms := t.tokenize(text)
-	tf := t.computeTF(terms)
+	expandedTerms := t.expandSynonyms(terms)
+	allTerms := append(terms, expandedTerms...)
+
+	tf := t.computeTF(allTerms)
 
 	queryVec := make([]float32, t.dim)
 	termWeights := make(map[string]float32)
@@ -126,6 +206,20 @@ func (t *TFIDF) EmbedWithWeights(text string) ([]float32, map[string]float32, er
 		weight := freq * idf
 		queryVec[pos] = weight
 		termWeights[term] = weight
+	}
+
+	if t.useFuzzy && len(terms) > 0 {
+		fuzzyTerms := t.findFuzzyMatches(terms)
+		for term, freq := range fuzzyTerms {
+			pos := t.hashTerm(term)
+			idf := t.idf[term]
+			if idf == 0 {
+				idf = float32(math.Log(float64(t.docCount+1))) + 1
+			}
+			weight := freq * idf * 0.5
+			queryVec[pos] += weight
+			termWeights[term] += weight
+		}
 	}
 
 	t.normalize(queryVec)
@@ -178,14 +272,14 @@ func (t *TFIDF) AddDocument(id string, text string) error {
 
 	vec := make([]float32, t.dim)
 	if t.useBM25 {
-		for term, tf := range docTF {
+		for term, tfVal := range docTF {
 			pos := t.hashTerm(term)
 			idf := t.idf[term]
 			if idf == 0 {
 				idf = float32(math.Log(float64(t.docCount+1))) + 1
 			}
 			docLen := float32(docLength)
-			tfNorm := (tf * (t.k1 + 1)) / (tf + t.k1*(1-t.b+t.b*docLen/t.avgDocLength))
+			tfNorm := (tfVal * (t.k1 + 1)) / (tfVal + t.k1*(1-t.b+t.b*docLen/t.avgDocLength))
 			vec[pos] = tfNorm * idf
 		}
 	} else {
@@ -291,14 +385,20 @@ func (t *TFIDF) GetStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"doc_count":    t.docCount,
-		"vocab_size":   len(t.vocab),
-		"avg_doc_len":  t.avgDocLength,
-		"total_terms":  totalTerms,
-		"dimension":    t.dim,
-		"algorithm":    "BM25",
-		"k1":           t.k1,
-		"b":            t.b,
+		"doc_count":      t.docCount,
+		"vocab_size":     len(t.vocab),
+		"avg_doc_len":    t.avgDocLength,
+		"total_terms":    totalTerms,
+		"dimension":      t.dim,
+		"algorithm":      "BM25",
+		"k1":             t.k1,
+		"b":              t.b,
+		"use_ngrams":     t.useNgrams,
+		"ngram_range":    t.ngramRange,
+		"use_fuzzy":      t.useFuzzy,
+		"fuzzy_threshold": t.fuzzyThreshold,
+		"use_code_token": t.useCodeToken,
+		"synonyms_loaded": len(t.synonyms),
 	}
 }
 
@@ -320,7 +420,8 @@ func (t *TFIDF) tokenize(text string) []string {
 				if !englishStopwords[term] {
 					term = t.stem(term)
 					if len(term) >= 2 {
-						terms = append(terms, term)
+						processedTerms := t.processToken(term)
+						terms = append(terms, processedTerms...)
 					}
 				}
 			}
@@ -333,12 +434,182 @@ func (t *TFIDF) tokenize(text string) []string {
 		if !englishStopwords[term] {
 			term = t.stem(term)
 			if len(term) >= 2 {
-				terms = append(terms, term)
+				processedTerms := t.processToken(term)
+				terms = append(terms, processedTerms...)
 			}
 		}
 	}
 
 	return terms
+}
+
+func (t *TFIDF) processToken(term string) []string {
+	var terms []string
+
+	if t.useCodeToken {
+		codeTokens := t.codeTokenize(term)
+		terms = append(terms, codeTokens...)
+	} else {
+		terms = append(terms, term)
+	}
+
+	if t.useNgrams && len(terms) > 0 {
+		ngrams := t.generateNgrams(terms)
+		terms = append(terms, ngrams...)
+	}
+
+	return terms
+}
+
+func (t *TFIDF) codeTokenize(term string) []string {
+	var tokens []string
+
+	camelCase := regexp.MustCompile(`([a-z])([A-Z])`)
+	term = camelCase.ReplaceAllString(term, "$1 $2")
+
+	parts := strings.Fields(term)
+
+	for _, part := range parts {
+		cleaned := strings.Trim(part, "_-.")
+
+		if strings.Contains(cleaned, "_") {
+			underscoreParts := strings.Split(cleaned, "_")
+			for _, p := range underscoreParts {
+				if len(p) >= 2 {
+					tokens = append(tokens, strings.ToLower(p))
+				}
+			}
+		} else if strings.Contains(cleaned, "-") {
+			kebabParts := strings.Split(cleaned, "-")
+			for _, p := range kebabParts {
+				if len(p) >= 2 {
+					tokens = append(tokens, strings.ToLower(p))
+				}
+			}
+		} else if len(cleaned) > 0 {
+			tokens = append(tokens, strings.ToLower(cleaned))
+		}
+	}
+
+	return tokens
+}
+
+func (t *TFIDF) generateNgrams(tokens []string) []string {
+	var ngrams []string
+
+	if len(tokens) >= 2 {
+		for i := 0; i < len(tokens)-1; i++ {
+			bigram := "bg:" + tokens[i] + "_" + tokens[i+1]
+			ngrams = append(ngrams, bigram)
+		}
+	}
+
+	if len(tokens) >= 3 && t.ngramRange >= 3 {
+		for i := 0; i < len(tokens)-2; i++ {
+			trigram := "tg:" + tokens[i] + "_" + tokens[i+1] + "_" + tokens[i+2]
+			ngrams = append(ngrams, trigram)
+		}
+	}
+
+	return ngrams
+}
+
+func (t *TFIDF) expandSynonyms(terms []string) []string {
+	var expanded []string
+	seen := make(map[string]bool)
+
+	for _, term := range terms {
+		if synonyms, ok := t.synonyms[term]; ok {
+			for _, syn := range synonyms {
+				if !seen[syn] && syn != term {
+					seen[syn] = true
+					expanded = append(expanded, syn)
+				}
+			}
+		}
+	}
+
+	return expanded
+}
+
+func (t *TFIDF) findFuzzyMatches(terms []string) map[string]float32 {
+	fuzzyMatches := make(map[string]float32)
+
+	t.mu.RLock()
+	vocabTerms := make([]string, 0, len(t.vocab))
+	for term := range t.vocab {
+		vocabTerms = append(vocabTerms, term)
+	}
+	t.mu.RUnlock()
+
+	for _, term := range terms {
+		if len(term) < 3 || len(term) > 12 {
+			continue
+		}
+
+		for _, vocabTerm := range vocabTerms {
+			if len(vocabTerm) < 3 || len(vocabTerm) > 12 {
+				continue
+			}
+
+			dist := levenshteinDistance(term, vocabTerm)
+			if dist > 0 && dist <= t.fuzzyThreshold {
+				fuzzyMatches[vocabTerm] = float32(1.0 / float32(dist+1))
+			}
+		}
+	}
+
+	return fuzzyMatches
+}
+
+func levenshteinDistance(s1, s2 string) int {
+	if len(s1) == 0 {
+		return len(s2)
+	}
+	if len(s2) == 0 {
+		return len(s1)
+	}
+
+	matrix := make([][]int, len(s1)+1)
+	for i := range matrix {
+		matrix[i] = make([]int, len(s2)+1)
+	}
+
+	for i := 0; i <= len(s1); i++ {
+		matrix[i][0] = i
+	}
+	for j := 0; j <= len(s2); j++ {
+		matrix[0][j] = j
+	}
+
+	for i := 1; i <= len(s1); i++ {
+		for j := 1; j <= len(s2); j++ {
+			cost := 1
+			if s1[i-1] == s2[j-1] {
+				cost = 0
+			}
+			matrix[i][j] = min(
+				matrix[i-1][j]+1,
+				matrix[i][j-1]+1,
+				matrix[i-1][j-1]+cost,
+			)
+		}
+	}
+
+	return matrix[len(s1)][len(s2)]
+}
+
+func min(a, b, c int) int {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
 }
 
 func (t *TFIDF) stem(word string) string {
@@ -530,5 +801,5 @@ func cosineSimilarity(a, b []float32) float32 {
 }
 
 func init() {
-	fmt.Println("Enhanced TF-IDF/BM25 embedder loaded")
+	fmt.Println("Enhanced TF-IDF/BM25 embedder loaded with N-grams, code tokenization, synonyms, and fuzzy matching")
 }

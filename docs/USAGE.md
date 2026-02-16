@@ -260,6 +260,72 @@ curl "http://localhost:9090/api/v1/blob/abc123def456"
 
 Returns the raw file content (text/plain).
 
+## Search Features
+
+Mindy includes advanced search capabilities for better relevance:
+
+### N-gram Indexing
+
+Mindy automatically captures phrases using n-grams:
+- **Bigrams** (2-word phrases): `bg:machine_learning`
+- **Trigrams** (3-word phrases): `tg:machine_learning_algorithms`
+
+This improves phrase matching:
+```bash
+# Searches for "machine learning" as a phrase
+curl "http://localhost:9090/api/v1/search?q=machine+learning"
+```
+
+### Code-aware Tokenization
+
+Mindy intelligently splits code identifiers:
+- `camelCase` → `camel`, `case`
+- `snake_case` → `snake`, `case`
+- `kebab-case` → `kebab`, `case`
+- `PascalCase` → `pascal`, `case`
+
+```bash
+# Searches for "functionName" and matches "function name"
+curl "http://localhost:9090/api/v1/search?q=functionName"
+
+# Searches for "my_variable" and matches "my variable"  
+curl "http://localhost:9090/api/v1/search?q=my_variable"
+```
+
+### Synonym Expansion
+
+Mindy expands queries with programming synonyms:
+- `func` → `function`, `method`
+- `test` → `testing`, `spec`
+- `err` → `error`, `exception`
+- `cfg` → `config`, `settings`
+- 500+ programming terms included
+
+```bash
+# Matches "function", "method", "func"
+curl "http://localhost:9090/api/v1/search?q=func"
+
+# Matches "test", "testing", "spec"
+curl "http://localhost:9090/api/v1/search?q=test+err"
+```
+
+### Fuzzy Matching
+
+Mindy handles typos automatically using Levenshtein distance:
+- Matches within 2 edits by default
+- Finds close matches in vocabulary
+
+```bash
+# Matches "python" even with typos like "pythn"
+curl "http://localhost:9090/api/v1/search?q=pythn"
+```
+
+### BM25 Ranking
+
+BM25 is enabled by default for better keyword search:
+- Better handles document length normalization
+- Improves relevance for varied document sizes
+
 ## Understanding Search Results
 
 ### Interpreting Scores
@@ -653,3 +719,30 @@ type "%USERPROFILE%\.mindy\data\tfidf\meta.json"
 - **No semantic understanding** - TF-IDF is keyword-based
 - **Single user** - No multi-tenant support
 - **No real-time sync** - File watcher polls every 5 seconds
+
+## Customizing Synonyms
+
+You can customize the synonym map by creating a config file:
+
+```bash
+# Create config directory
+mkdir "%USERPROFILE%\.mindy\config"
+
+# Create synonyms.json
+notepad "%USERPROFILE%\.mindy\config\synonyms.json"
+```
+
+Add your own synonyms:
+```json
+{
+  "myterm": ["myterm", "my-term", "my_term"],
+  "custom": ["custom", "personal", "user-defined"]
+}
+```
+
+## Auto-reindex
+
+Mindy automatically detects when index updates are needed:
+- Version tracking in `file_tracker.json`
+- Triggers reindex when upgrading to new versions
+- Check logs for auto-reindex status
