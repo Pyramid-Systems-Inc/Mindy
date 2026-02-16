@@ -51,6 +51,26 @@
 - [x] **Fuzzy Matching** - Levenshtein distance for typo tolerance (threshold: 2)
 - [x] **Auto-reindex** - Version tracking triggers automatic reindex on config changes
 
+### Phase 2 Features - COMPLETE ✓
+
+#### Data Management
+- [x] **Export API** - ZIP backup with all data
+- [x] **Import API** - Restore from ZIP backup
+- [x] **Batch Delete** - Delete by path pattern, file type, age
+- [x] **Batch Reindex** - Reindex by path pattern, file type
+- [x] **Reset API** - Clear all data
+
+#### Search Features
+- [x] **Search History** - Automatic tracking of searches (JSON file)
+- [x] **Saved Searches** - Save/load named searches (JSON file)
+
+#### Web UI Enhancements
+- [x] **Autocomplete** - Shows history and saved searches while typing
+- [x] **Document Preview Modal** - Click results to preview content
+- [x] **Entity Visualization Tab** - Interactive graph view of entities
+- [x] **History Tab** - Browse recent searches
+- [x] **Saved Searches Tab** - Manage saved searches
+
 ## New API Endpoints
 
 | Method | Path | Description |
@@ -64,6 +84,27 @@
 | GET | /api/v1/graph/node/{id} | Get node by ID |
 | GET | /api/v1/graph/traverse | Graph traversal |
 | GET | /api/v1/blob/{hash} | Get blob content |
+
+## Data Management API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/v1/export | Export data to ZIP |
+| POST | /api/v1/import | Import data from ZIP |
+| POST | /api/v1/reset | Clear all data |
+| POST | /api/v1/batch/delete | Batch delete files |
+| POST | /api/v1/batch/reindex | Batch reindex files |
+
+## Search History API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/search/history | Get search history |
+| DELETE | /api/v1/search/history | Clear history |
+| GET | /api/v1/search/saved | Get saved searches |
+| POST | /api/v1/search/saved | Save a search |
+| PUT | /api/v1/search/saved/{id} | Update saved search |
+| DELETE | /api/v1/search/saved/{id} | Delete saved search |
 
 ## Search Filters
 ```
@@ -83,9 +124,10 @@ GET /api/v1/search?q=<query>&k=<n>&offset=<n>&type=<type>&path=<path>
 Run tests: `go test ./...`
 
 ## What's Left (Future)
-- [ ] Batch import/export
-- [ ] Web crawler (Phase 2)
-- [ ] Connectors (GitHub, Gmail) (Phase 2)
+- [ ] Web crawler (Phase 3)
+- [ ] Connectors (GitHub, Gmail) (Phase 3)
+- [ ] Advanced entity visualization
+- [ ] Query suggestions
 
 ## Technology Stack
 | Component | Implementation |

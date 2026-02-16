@@ -629,6 +629,115 @@ curl "http://localhost:9090/api/v1/graph/traverse?start=entity:python&depth=1"
 curl "http://localhost:9090/api/v1/blob/abc123def456"
 ```
 
+## Data Management
+
+### Export Data
+
+Export all your data to a ZIP file for backup:
+
+```bash
+# Full export (all data)
+curl -X POST "http://localhost:9090/api/v1/export"
+
+# Export to custom path
+curl -X POST "http://localhost:9090/api/v1/export?output=C:\backups\mindy.zip"
+
+# Selective export
+curl -X POST "http://localhost:9090/api/v1/export?blobs=false&tfidf=true"
+```
+
+Options:
+- `blobs` - Include file content (default: true)
+- `graph` - Include knowledge graph (default: true)
+- `tfidf` - Include vector index (default: true)
+- `history` - Include search history (default: true)
+
+Response:
+```json
+{"status": "ok", "output": "C:\\Users\\You\\.mindy\\data\\mindy_backup_20240115.zip", "message": "Export completed successfully"}
+```
+
+### Import Data
+
+Restore from a backup ZIP file:
+
+```bash
+# Full restore (replaces all data)
+curl -X POST "http://localhost:9090/api/v1/import?path=C:\backups\mindy.zip"
+
+# Merge with existing data
+curl -X POST "http://localhost:9090/api/v1/import?path=C:\backups\mindy.zip&merge=true"
+```
+
+### Batch Delete
+
+Delete multiple files by pattern:
+
+```bash
+# Dry run (see what would be deleted)
+curl -X POST "http://localhost:9090/api/v1/batch/delete?path=C:\temp&dry_run=true"
+
+# Delete files older than 30 days
+curl -X POST "http://localhost:9090/api/v1/batch/delete?older_than=30"
+
+# Delete specific file type
+curl -X POST "http://localhost:9090/api/v1/batch/delete?type=pdf"
+
+# Delete by path pattern
+curl -X POST "http://localhost:9090/api/v1/batch/delete?path=C:\OldDocs"
+```
+
+### Batch Reindex
+
+Reindex multiple files:
+
+```bash
+# Reindex all PDFs
+curl -X POST "http://localhost:9090/api/v1/batch/reindex?type=pdf"
+
+# Reindex files in specific path
+curl -X POST "http://localhost:9090/api/v1/batch/reindex?path=C:\Projects"
+```
+
+### Reset Data
+
+Clear all indexed data (use with caution):
+
+```bash
+curl -X POST "http://localhost:9090/api/v1/reset?confirm=yes"
+```
+
+## Search History & Saved Searches
+
+### Search History
+
+Your searches are automatically saved:
+
+```bash
+# Get recent searches
+curl "http://localhost:9090/api/v1/search/history?limit=10"
+
+# Clear history
+curl -X DELETE "http://localhost:9090/api/v1/search/history"
+```
+
+### Saved Searches
+
+Save searches for quick access:
+
+```bash
+# Save a search
+curl -X POST "http://localhost:9090/api/v1/search/saved" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Python Tutorial", "query": "python programming tutorial"}'
+
+# Get all saved searches
+curl "http://localhost:9090/api/v1/search/saved"
+
+# Delete a saved search
+curl -X DELETE "http://localhost:9090/api/v1/search/saved/20240115123456abcd"
+```
+
 ## Troubleshooting
 
 ### Port Already in Use
