@@ -21,7 +21,7 @@
 1. **File Ingestion**
    - Watch directories for new/changed files (polling every 5s)
    - Manual ingest via API
-   - Support: .txt, .md, .html, .json, .xml, .csv, .log
+   - Support: .txt, .md, .html, .json, .xml, .csv, .log, .pdf, .docx
 
 2. **Blob Store**
    - Store raw file content by content-hash (SHA256)
@@ -30,7 +30,7 @@
    - Two-level directory structure for filesystem efficiency
 
 3. **Vector Index**
-   - TF-IDF with hash-based vectorization (4096-dim)
+   - TF-IDF with hash-based vectorization (8192-dim)
    - IVF (Inverted File) index for fast search
    - Cosine similarity search
    - Located at `~/.mindy/data/vector`
@@ -69,7 +69,7 @@
 ### Vector Index
 
 **TF-IDF Implementation**:
-- **Dimension**: 4096 (fixed)
+- **Dimension**: 8192 (fixed)
 - **Mapping**: Hash-based (FNV32a)
 - **TF formula**: `1 + log(TF_raw)`
 - **IDF formula**: `log((N + 1) / (df + 1))`
@@ -125,8 +125,12 @@ Edges:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | /health | Health check |
+| GET | /ui | Web UI |
 | POST | /api/v1/ingest?path=<filepath> | Index file or directory |
+| POST | /api/v1/reindex | Reindex all tracked files |
 | GET | /api/v1/search?q=<query>&k=<n> | Semantic search (default k=10) |
+| GET | /api/v1/stats | Index statistics |
+| GET | /api/v1/graph/search?q=<query> | Search nodes by label |
 | GET | /api/v1/graph/node/{id} | Get node by ID |
 | GET | /api/v1/graph/traverse?start=<id>&type=<edge>&depth=<n> | Graph traversal |
 | GET | /api/v1/blob/{hash} | Get raw blob content |
@@ -137,6 +141,10 @@ Edges:
 |-----------|------|---------|-------------|
 | q | string | required | Search query |
 | k | int | 10 | Number of results |
+| offset | int | 0 | Pagination offset |
+| limit | int | k | Results per page |
+| type | string | "" | Filter by file extension |
+| path | string | "" | Filter by path prefix |
 
 ### Traverse Query Parameters
 
@@ -174,12 +182,10 @@ Graph Query → BFS Traversal → Node/Edge Results
 
 ## Out of Scope (Phase 1)
 
-- PDF/DOCX parsing (future)
 - Web crawler (Phase 2)
 - Connectors (GitHub, Gmail) (Phase 2)
 - Multi-node coordination (Phase 3)
 - Multi-tenant / auth (Phase 3)
-- Web UI (future)
 - Real-time sync (future)
 
 ## Technology
@@ -194,6 +200,17 @@ Graph Query → BFS Traversal → Node/Edge Results
 
 ## Future Specifications (Planned)
 
+### Phase 2 - Distributed / Crawler
+
+### Web Crawler
+- Index web pages automatically
+- Respect robots.txt
+- Configurable crawl depth
+
+### Connectors
+- GitHub (repos, issues, PRs)
+- Gmail (emails)
+
 ### BM25 Ranking
 Alternative ranking algorithm with better performance for keyword search:
 - Parameters: k1 (term frequency saturation), b (document length normalization)
@@ -203,12 +220,3 @@ Alternative ranking algorithm with better performance for keyword search:
 Capture phrase information:
 - Unigrams, bigrams, trigrams
 - Configurable n-gram range
-
-### PDF Support
-- Text extraction from PDF
-- Metadata preservation
-
-### Connectors
-- GitHub (repos, issues, PRs)
-- Gmail (emails)
-- File system (extended)

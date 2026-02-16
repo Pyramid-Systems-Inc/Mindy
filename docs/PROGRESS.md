@@ -30,7 +30,7 @@
   - Document length tracking
   - Better IDF smoothing
 
-### Phase 1.3 Enhancements (Core System) - JUST COMPLETED ✓
+### Phase 1.3 Enhancements (Core System) - COMPLETE ✓
 - [x] **PDF/DOCX Support** - Text extraction from PDF and DOCX files
 - [x] **Incremental Indexing** - File tracker tracks hashes, skips unchanged files
 - [x] **Search Filters** - Filter by file type and path
@@ -41,6 +41,7 @@
 - [x] **Index Stats API** - GET /api/v1/stats endpoint
 - [x] **Reindex API** - POST /api/v1/reindex for full reindex
 - [x] **Graph Search** - GET /api/v1/graph/search for node lookup
+- [x] **Web UI** - Built-in web interface at /ui
 
 ## New API Endpoints
 
@@ -77,7 +78,8 @@ Run tests: `go test ./...`
 - [ ] N-gram Indexing for phrases
 - [ ] Query rewriting/synonyms
 - [ ] Batch import/export
-- [ ] Web UI
+- [ ] Web crawler (Phase 2)
+- [ ] Connectors (GitHub, Gmail) (Phase 2)
 
 ## Technology Stack
 | Component | Implementation |

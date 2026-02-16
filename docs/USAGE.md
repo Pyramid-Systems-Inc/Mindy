@@ -11,7 +11,25 @@ mindy.exe --config mindy.yaml
 
 # Check if it's running
 curl http://localhost:9090/health
+
+# Open the Web UI
+start http://localhost:9090/ui
 ```
+
+## Web UI
+
+Mindy includes a built-in web interface for searching and exploring your knowledge graph.
+
+```bash
+# Access in browser
+http://localhost:9090/ui
+```
+
+Features:
+- Search bar with results
+- Filter by file type
+- View document details and metadata
+- Navigate the knowledge graph
 
 ## Installation
 
@@ -95,6 +113,37 @@ Response:
 {"status": "ok", "message": "Directory queued for indexing", "files": 42}
 ```
 
+### Get Index Statistics
+
+```bash
+curl "http://localhost:9090/api/v1/stats"
+```
+
+Response:
+```json
+{
+  "documents": 150,
+  "chunks": 892,
+  "entities": 2341,
+  "blobs": 150,
+  "vector_dim": 8192,
+  "vocab_size": 4523
+}
+```
+
+### Reindex All Files
+
+Force reindex of all tracked files (useful after upgrades):
+
+```bash
+curl -X POST "http://localhost:9090/api/v1/reindex"
+```
+
+Response:
+```json
+{"status": "ok", "message": "Reindex started", "files": 150}
+```
+
 ### Semantic Search
 
 ```bash
@@ -103,24 +152,52 @@ curl "http://localhost:9090/api/v1/search?q=python+programming"
 
 # Search with custom limit
 curl "http://localhost:9090/api/v1/search?q=python+programming&k=5"
+
+# Search with filters
+curl "http://localhost:9090/api/v1/search?q=python&type=pdf&path=C:\Users\You\Docs"
 ```
 
-Response:
+### Search Filters
+
+Filter search results by file type and/or path:
+
+```bash
+# Filter by file type
+curl "http://localhost:9090/api/v1/search?q=python&type=pdf"
+curl "http://localhost:9090/api/v1/search?q=python&type=md"
+curl "http://localhost:9090/api/v1/search?q=python&type=docx"
+
+# Filter by path prefix
+curl "http://localhost:9090/api/v1/search?q=python&path=C:\Users\You\Research"
+
+# Combine filters
+curl "http://localhost:9090/api/v1/search?q=python&type=pdf&path=C:\Research"
+```
+
+### Pagination
+
+Use `offset` and `limit` for paginated results:
+
+```bash
+# First page (0-9)
+curl "http://localhost:9090/api/v1/search?q=python&limit=10"
+
+# Second page (10-19)
+curl "http://localhost:9090/api/v1/search?q=python&offset=10&limit=10"
+
+# Get next_offset from response
+curl "http://localhost:9090/api/v1/search?q=python&offset=0&limit=5"
+```
+
+Response includes pagination metadata:
 ```json
 {
-  "query": "python programming",
-  "results": [
-    {
-      "id": "chunk:abc123:0",
-      "score": 0.85,
-      "meta": "{\"doc_id\":\"doc:abc123\",\"chunk\":0,\"path\":\"C:\\Users\\You\\Docs\\python.md\"}"
-    },
-    {
-      "id": "chunk:def456:1",
-      "score": 0.72,
-      "meta": "{\"doc_id\":\"doc:def456\",\"chunk\":1,\"path\":\"C:\\Users\\You\\Docs\\tutorial.md\"}"
-    }
-  ]
+  "query": "python",
+  "total": 42,
+  "offset": 0,
+  "limit": 10,
+  "next_offset": 10,
+  "results": [...]
 }
 ```
 
@@ -236,6 +313,8 @@ curl "http://localhost:9090/api/v1/blob/abc123def456"
 | `.xml` | XML | Direct |
 | `.csv` | CSV | Direct |
 | `.log` | Log | Direct |
+| `.pdf` | PDF | Text extraction |
+| `.docx` | Word | Text extraction |
 
 ## Entity Types Extracted
 
@@ -571,7 +650,6 @@ type "%USERPROFILE%\.mindy\data\tfidf\meta.json"
 
 ## Limitations
 
-- **No PDF/DOCX support** (yet)
 - **No semantic understanding** - TF-IDF is keyword-based
 - **Single user** - No multi-tenant support
 - **No real-time sync** - File watcher polls every 5 seconds
