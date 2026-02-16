@@ -183,14 +183,16 @@ const webUIHTML = `<!DOCTYPE html>
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeSaveModal(); } });
         async function loadGraph() { const container = document.getElementById('graphContainer'); try { const response = await fetch(API_BASE + '/api/v1/graph/search?type=Entity&limit=30'); const data = await response.json(); if (data.nodes && data.nodes.length > 0) { const nodes = data.nodes; container.innerHTML = '<div style="margin-bottom:1rem;"><h3 style="color:var(--text);margin-bottom:0.5rem;">Knowledge Graph - ' + nodes.length + ' Entities</h3><p style="color:var(--text-muted);font-size:0.85rem;">Click an entity to explore connections</p></div><div style="display:flex;flex-wrap:wrap;gap:0.5rem;">' + nodes.map(n => '<span style="background:var(--bg);padding:0.5rem 1rem;border-radius:20px;font-size:0.85rem;cursor:pointer;transition:all 0.2s;" onclick="traverseGraph(\'' + n.id + '\')">' + (n.label || n.id).substring(0, 20) + '</span>').join('') + '</div>'; } else { container.innerHTML = '<div class="empty-state"><p>No entities found. Index some documents first!</p></div>'; } } catch (e) { container.innerHTML = '<div class="empty-state"><p style="color:var(--error);">Error: ' + e.message + '</p></div>'; } }
         function traverseGraph(entityId) { fetch(API_BASE + '/api/v1/graph/traverse?start=' + entityId + '&depth=2').then(r => r.json()).then(data => { if (data.nodes && data.nodes.length > 0) alert('Found ' + data.nodes.length + ' connected nodes'); }); }
-    </script>
+</script>
 </body>
 </html>`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; text-align: center; }
-        .header h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-        .header p { font-size: 0.9rem; opacity: 0.9; }
+
+const legacyWebUIHTML = `
+	        * { margin: 0; padding: 0; box-sizing: border-box; }
+	        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+	        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; text-align: center; }
+	        .header h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+	        .header p { font-size: 0.9rem; opacity: 0.9; }
         .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
         .search-wrapper { position: relative; margin-bottom: 1.5rem; }
         .search-box { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
