@@ -484,8 +484,8 @@ const webUIHTML = `<!DOCTYPE html>
         async function loadGraph() {
             const svg = document.getElementById('graphSvg');
             try {
-                // Get some entities
-                const response = await fetch(API_BASE + '/api/v1/graph/search?q=&type=Entity&limit=20');
+                // Get some entities - using type filter without query
+                const response = await fetch(API_BASE + '/api/v1/graph/search?type=Entity&limit=20');
                 const data = await response.json();
                 
                 if (data.nodes && data.nodes.length > 0) {
@@ -541,7 +541,6 @@ const webUIHTML = `<!DOCTYPE html>
         }
     </script>
 </body>
-</html>`
 </html>`
 
 type Server struct {
@@ -829,10 +828,7 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) searchNodes(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
-	if query == "" {
-		http.Error(w, "q (query) required", http.StatusBadRequest)
-		return
-	}
+	nodeType := r.URL.Query().Get("type")
 
 	limit := 20
 	if lStr := r.URL.Query().Get("limit"); lStr != "" {
@@ -840,8 +836,6 @@ func (s *Server) searchNodes(w http.ResponseWriter, r *http.Request) {
 			limit = parsed
 		}
 	}
-
-	nodeType := r.URL.Query().Get("type")
 
 	typeFilter := map[string]string{
 		"document": "Document",
