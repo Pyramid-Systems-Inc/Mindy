@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	DefaultDim          = 384
+	DefaultDim          = 8192
 	DefaultNlists       = 100
 	DefaultNprobes     = 10
 	DefaultKmeansIters = 10

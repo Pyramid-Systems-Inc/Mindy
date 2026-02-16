@@ -135,11 +135,29 @@ const webUIHTML = `<!DOCTYPE html>
         </div>
         
         <div class="tabs">
-            <button class="tab active" data-tab="search">Search Results</button>
+            <button class="tab active" data-tab="search">Search</button>
+            <button class="tab" data-tab="index">Index Files</button>
             <button class="tab" data-tab="history">History</button>
-            <button class="tab" data-tab="saved">Saved Searches</button>
+            <button class="tab" data-tab="saved">Saved</button>
             <button class="tab" data-tab="graph">Graph</button>
             <button class="tab" data-tab="api">API</button>
+        </div>
+        
+        <div class="tab-content active" id="search">
+            <div class="results" id="resultsContainer">
+                <p class="empty-state">Enter a search query above</p>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="index">
+            <div class="results">
+                <h3 style="margin-bottom:1rem;">Index Files or Folders</h3>
+                <div style="margin-bottom:1rem;">
+                    <input type="text" class="search-input" id="ingestPath" placeholder="Enter path (e.g., C:\Users\You\Documents)" style="width:100%;">
+                </div>
+                <button class="btn btn-primary" onclick="ingestPath()">Index</button>
+                <div id="ingestStatus" style="margin-top:1rem;"></div>
+            </div>
         </div>
         
         <div class="main-layout">
@@ -234,6 +252,39 @@ const webUIHTML = `<!DOCTYPE html>
         loadSavedSearches();
         loadGraph();
         
+        // Ingest function
+        async function ingestPath() {
+            const path = document.getElementById('ingestPath').value.trim();
+            if (!path) {
+                document.getElementById('ingestStatus').innerHTML = '<span style="color:red;">Please enter a path</span>';
+                return;
+            }
+            
+            document.getElementById('ingestStatus').innerHTML = '<span style="color:#666;">Indexing...</span>';
+            
+            try {
+                const response = await fetch(API_BASE + '/api/v1/ingest?path=' + encodeURIComponent(path), {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.status === 'ok') {
+                    document.getElementById('ingestStatus').innerHTML = '<span style="color:green;">Indexed ' + (data.files || 1) + ' file(s)!</span>';
+                } else {
+                    document.getElementById('ingestStatus').innerHTML = '<span style="color:red;">Error: ' + data.message + '</span>';
+                }
+            } catch (e) {
+                document.getElementById('ingestStatus').innerHTML = '<span style="color:red;">Error: ' + e.message + '</span>';
+            }
+        }
+        
+        // Enter key for ingest
+        document.getElementById('ingestPath').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                ingestPath();
+            }
+        });
+        
         // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
@@ -278,8 +329,10 @@ const webUIHTML = `<!DOCTYPE html>
                 const response = await fetch(API_BASE + '/api/v1/search?q=' + encodeURIComponent(query) + '&k=20');
                 const data = await response.json();
                 
+                console.log('Search response:', data);
+                
                 if (data.results && data.results.length > 0) {
-                    container.innerHTML = data.results.map((r, i) => {
+                    container.innerHTML = '<h3 style="margin-bottom:1rem;">Results (' + data.results.length + ')</h3>' + data.results.map((r, i) => {
                         let meta = {};
                         try { meta = JSON.parse(r.meta); } catch (e) {}
                         const path = meta.path || r.id;
@@ -289,7 +342,7 @@ const webUIHTML = `<!DOCTYPE html>
                             '</div>';
                     }).join('');
                 } else {
-                    container.innerHTML = '<p class="empty-state">No results found</p>';
+                    container.innerHTML = '<p class="empty-state">No results found</p><pre style="text-align:left;background:#f5f5f5;padding:1rem;border-radius:8px;margin-top:1rem;">Debug: ' + JSON.stringify(data, null, 2) + '</pre>';
                 }
             } catch (e) {
                 container.innerHTML = '<p style="color: red;">Error: ' + e.message + '</p>';
@@ -712,6 +765,11 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
 		http.Error(w, "q (query) required", http.StatusBadRequest)
+		return
+	}
+
+	if s.embedder == nil || s.vectorIndex == nil {
+		http.Error(w, "indexer not available", http.StatusServiceUnavailable)
 		return
 	}
 
