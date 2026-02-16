@@ -21,37 +21,42 @@
 - [x] Implemented TF-IDF embedder (local-only, no external deps)
 - [x] Improved entity extraction with regex patterns (email, URL, phone, date)
 
-### Documentation
-- [x] ARCHITECTURE.md - System design and components
-- [x] SPEC.md - Feature specification
-- [x] USAGE.md - User guide and API examples
-- [x] Testing framework (unit tests for embedder, blob, graph, indexer)
+### Phase 1.2 Enhancements (Just Completed)
+- [x] Enhanced TF-IDF with:
+  - Stopword filtering (60+ common English words)
+  - Simple stemming (15 common suffixes)
+  - BM25 ranking support (optional)
+  - Increased dimension (8192)
+  - Document length tracking
+  - Better IDF smoothing
+- [x] Comprehensive documentation:
+  - ARCHITECTURE.md - Detailed system design
+  - SPEC.md - Technical specification
+  - USAGE.md - User guide with examples
+- [x] Extended test suite (11 tests for TF-IDF)
 
 ## Testing Status
 
 | Component | Tests | Status |
 |-----------|-------|--------|
-| TF-IDF Embedder | 5 | ✓ Passing |
+| TF-IDF Embedder | 11 | ✓ Passing |
 | Blob Store | 4 | ⚠ Needs disk space |
 | Graph Store | 3 | ⚠ Needs disk space |
 | Indexer | 4 | ⚠ Needs disk space |
 
 Run tests: `go test ./...`
 
-## Current Task
-- Phase 1.2 enhancements (PDF support, better search)
-
-## Next Steps (Phase 1.2)
+## Next Steps (Phase 1.3)
 1. Add PDF support to indexer
 2. Improve search API (filters, pagination)
 3. Add better CLI usage/help
-4. Consider BM25 ranking
+4. Add BM25 as primary algorithm
 
 ## Technology Stack
 | Component | Implementation |
 |-----------|---------------|
 | Language | Go 1.21+ |
 | Storage | Local filesystem + BadgerDB |
-| Vector | Custom TF-IDF (hash-based) |
+| Vector | Custom TF-IDF/BM25 (hash-based) |
 | HTTP | Chi router |
 | No external dependencies | ✓ |
